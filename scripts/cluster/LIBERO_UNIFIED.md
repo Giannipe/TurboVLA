@@ -1,7 +1,8 @@
 # Controlled evaluation of the September 2026 unified release
 
-This is a checkpoint-only comparison against the old four-checkpoint baseline.
-No model, preprocessing, simulator, dataset or environment changes are made.
+The completed run documented here was a checkpoint-only comparison against the
+old four-checkpoint baseline. No model, preprocessing, simulator, dataset or
+environment changes were made during that run.
 The shared batch runner has optional checkpoint/preflight overrides; its default
 old-release behavior and evaluation arguments are preserved.
 
@@ -15,9 +16,12 @@ Existing releases, manifests and result directories are not overwritten.
 
 Authors describe the new export as the 34k-step EMA checkpoint. Its archive uses
 `model_state_dict`, not `ema_model_state_dict`. Upstream commit `ced2b0c` requires
-the latter and rejects this export. We deliberately keep the baseline loader at
-`c7c2ba9`, which reads `model_state_dict` and performs a strict load. This does not
-compute EMA or rename/rewrite checkpoint keys. EMA provenance is the authors'
+the latter and rejects this export. The completed run used the baseline loader
+at `c7c2ba9`, which reads `model_state_dict` and performs a strict load. After
+completion we integrated upstream into `setup/cluster-reproduction`, together
+with the tested compatibility patch: prefer `ema_model_state_dict`, otherwise
+accept `model_state_dict` only for the exact SHA256 above. Neither implementation
+computes EMA or renames/rewrites checkpoint keys. EMA provenance is the authors'
 statement, not something inferred from the key name.
 
 Sources:
@@ -65,3 +69,6 @@ Object/Goal/Long initially failed with Slurm `JobLaunchFailure` on
 run directory excluding that node: Object `1920976`, Goal `1920977`, Long
 `1920978`. Spatial `1920962` was not resubmitted. The cluster-only Git commit
 does not change model/evaluator code used by these runs.
+
+All four evaluations finished successfully, with 500 episodes per suite and
+1946/2000 successes overall. See [LIBERO_UNIFIED_RESULTS.md](LIBERO_UNIFIED_RESULTS.md).

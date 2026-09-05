@@ -10,11 +10,13 @@ four-checkpoint release for baseline comparisons. For the September **unified**
 checkpoint, use [LIBERO_UNIFIED.md](LIBERO_UNIFIED.md). Do not replace old weights
 or results in place.
 
-The development worktree `/home/gpepe/ws/TurboVLA-upstream` is on
-`setup/upstream-september`, based on upstream `b29ab14`. The active baseline
-worktree remains on `setup/cluster-reproduction` while its rollouts finish.
-Do not reinstall the shared editable Conda package or change its source during
-those runs. Worktree-specific tests must explicitly set their import paths.
+Development now uses one worktree: `/home/gpepe/ws/TurboVLA`.
+`main` matches upstream `b29ab14`; `setup/cluster-reproduction` integrates that
+upstream revision, the cluster helpers and the verified-export loader patch.
+The temporary upstream worktree was integrated after all evaluation jobs ended.
+`archive/cluster-before-upstream-20260905` preserves the old evaluator and scripts.
+Do not switch branches or reinstall the shared editable Conda package during
+active jobs: either operation can change the source imported by those jobs.
 
 Upstream now recommends training batch 128 (8 per device x 4 devices x 4
 accumulation steps), not the paper's 256. It describes the new export as EMA at
@@ -26,7 +28,7 @@ Validate the updated worktree (unit tests + CPU strict checkpoint load, not a
 second benchmark run):
 
 ```bash
-TURBOVLA_REPO=/home/gpepe/ws/TurboVLA-upstream \
+TURBOVLA_REPO=/home/gpepe/ws/TurboVLA \
   sbatch scripts/cluster/validate_upstream_libero.sbatch
 ```
 
@@ -34,6 +36,10 @@ The updated branch adds a SHA256-allowlisted compatibility path for the official
 September export. Other checkpoints still require `ema_model_state_dict`, as
 upstream specifies. It prefers actual EMA state when present and does not
 silently treat arbitrary raw training checkpoints as EMA.
+
+The completed September unified run reached 1946/2000 (97.30%), compared with
+1953/2000 (97.65%, displayed as 97.7% in the paper). See
+[LIBERO_UNIFIED_RESULTS.md](LIBERO_UNIFIED_RESULTS.md) for the complete comparison.
 
 ## 1. Create the policy environments
 
@@ -241,6 +247,11 @@ typo.
   stack into `turbovla-robotwin`.
 
 ## 6. Evaluate the original four-checkpoint LIBERO release
+
+Historical recipe: the following old-checkpoint commands require the evaluator
+preserved on `archive/cluster-before-upstream-20260905`. The current branch's
+upstream-compatible loader deliberately does not allow arbitrary raw checkpoints.
+For normal use on the current branch, follow [LIBERO_UNIFIED.md](LIBERO_UNIFIED.md).
 
 Submit four independent Slurm jobs, one for each official suite/checkpoint
 pair. The helper gives all four jobs one shared result directory:
