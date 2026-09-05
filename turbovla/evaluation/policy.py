@@ -7,6 +7,7 @@ action denormalization, and the original gripper sign rule.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -247,17 +248,37 @@ def get_libero_dummy_action() -> list[float]:
     return [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0]
 
 
-def _checkpoint_state_dict(checkpoint: Any) -> dict[str, torch.Tensor]:
+# The authors' September 34k EMA export stores its weights under model_state_dict.
+# Allow that exact immutable artifact; retain upstream's EMA requirement for all
+# other checkpoints, including locally trained raw weights.
+_RELEASED_LIBERO_EXPORT_SHA256 = "d031ad7be05a2f5d04afb3194ed26b0cb46083685edee7a5e145078a37d26bab"
+
+
+def _checkpoint_state_dict(
+    checkpoint: Any, *, checkpoint_path: str | None = None
+) -> dict[str, torch.Tensor]:
     if not isinstance(checkpoint, dict):
         raise TypeError(f"Unsupported checkpoint type: {type(checkpoint)}")
 
     ema_state = checkpoint.get("ema_model_state_dict")
-    if not isinstance(ema_state, dict):
-        raise KeyError(
-            "LIBERO evaluation requires `ema_model_state_dict` in the checkpoint; "
-            "the raw `model_state_dict` is not used"
-        )
-    return ema_state
+    if isinstance(ema_state, dict):
+        return ema_state
+    exported_state = checkpoint.get("model_state_dict")
+    if isinstance(exported_state, dict) and checkpoint_path is not None:
+        digest = hashlib.sha256()
+        with open(checkpoint_path, "rb") as stream:
+            for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+                digest.update(block)
+        if digest.hexdigest() == _RELEASED_LIBERO_EXPORT_SHA256:
+            print(
+                "[TurboVLAPolicy] verified official September EMA export: "
+                "loading model_state_dict (no weight conversion).", flush=True,
+            )
+            return exported_state
+    raise KeyError(
+        "LIBERO evaluation requires `ema_model_state_dict`, except for the "
+        "SHA256-verified official September export; unverified raw weights are not used"
+    )
 
 
 def _strip_module_prefix(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -459,7 +480,9 @@ class TurboVLAPolicy:
             )
 
     def _load_checkpoint(self) -> None:
-        source_state = _strip_module_prefix(_checkpoint_state_dict(self._checkpoint))
+        source_state = _strip_module_prefix(
+            _checkpoint_state_dict(self._checkpoint, checkpoint_path=self.ckpt_path)
+        )
         self.model.load_state_dict(source_state, strict=True)
         if self.verbose:
             print(
