@@ -169,7 +169,7 @@ The default downloader uses [StarVLA/RoboTwin-Clean](https://huggingface.co/data
 
 ### LIBERO Training
 
-The paper recipe uses DINOv3 ViT-B, two camera views, 7-D actions, a 12-step action chunk, 80k optimizer steps, 10k warmup steps, and global batch size 256 on four GPUs.
+The paper recipe uses DINOv3 ViT-B, two camera views, 7-D actions, a 12-step action chunk, 80k optimizer steps, 10k warmup steps, and global batch size 128 on four GPUs (per-device batch size 8 with 4 gradient-accumulation steps).
 
 ```bash
 torchrun --nproc_per_node=4 experiments/libero/train.py \
@@ -181,6 +181,7 @@ torchrun --nproc_per_node=4 experiments/libero/train.py \
   --bert_path google-bert/bert-base-uncased \
   --allow_hf_download \
   --pretrained_init_ckpt /path/to/groundingdino_swint_ogc.pth \
+  --batch_size 8 \
   --checkpoint_dir outputs/libero
 ```
 

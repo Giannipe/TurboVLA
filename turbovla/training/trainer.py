@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument("--checkpoint_prefix", type=str, default="turbovla_step")
     parser.add_argument("--resume_mode", type=str, default="none", choices=["none", "model", "all"])
 
-    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--grad_accum_steps", type=int, default=4)
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--weight_decay", type=float, default=1e-10)

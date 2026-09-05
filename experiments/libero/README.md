@@ -37,7 +37,7 @@ The repository does not redistribute demonstrations. Use `scripts/libero/regener
 
 ## Training
 
-The released recipe uses full DINOv3 ViT-B unfreezing, global batch 256 on four GPUs, 80k optimizer steps, 10k warmup steps, learning rate `5e-5`, seed 42, FP32 policy parameters, and BF16 autocast for DINOv3.
+The released recipe uses full DINOv3 ViT-B unfreezing, global batch 128 on four GPUs (per-device batch size 8 with 4 gradient-accumulation steps), 80k optimizer steps, 10k warmup steps, learning rate `5e-5`, seed 42, FP32 policy parameters, and BF16 autocast for DINOv3.
 
 ```bash
 torchrun --nproc_per_node=4 experiments/libero/train.py \
@@ -49,6 +49,7 @@ torchrun --nproc_per_node=4 experiments/libero/train.py \
   --bert_path google-bert/bert-base-uncased \
   --allow_hf_download \
   --pretrained_init_ckpt /path/to/groundingdino_swint_ogc.pth \
+  --batch_size 8 \
   --checkpoint_dir outputs/checkpoints
 ```
 
