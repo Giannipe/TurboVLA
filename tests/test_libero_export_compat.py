@@ -1,4 +1,4 @@
-"""CPU-only tests for the narrowly allowlisted September release container."""
+"""CPU-only tests for narrowly allowlisted public release containers."""
 import hashlib
 from pathlib import Path
 import tempfile
@@ -38,6 +38,26 @@ class ExportCompatibilityTests(unittest.TestCase):
             with patch.object(policy, "_RELEASED_LIBERO_EXPORT_SHA256", hashlib.sha256(contents).hexdigest()):
                 self.assertIs(policy._checkpoint_state_dict(
                     {"model_state_dict": state}, checkpoint_path=str(path)), state)
+
+    def test_accepts_verified_legacy_export_without_converting_weights(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "legacy.pth"
+            contents = b"legacy test fixture"
+            path.write_bytes(contents)
+            state = {"tensor": object()}
+            with patch.object(policy, "_LEGACY_LIBERO_EXPORTS_SHA256",
+                              {hashlib.sha256(contents).hexdigest(): "spatial"}):
+                self.assertIs(policy._checkpoint_state_dict(
+                    {"model_state_dict": state}, checkpoint_path=str(path)), state)
+
+    def test_legacy_filename_and_metadata_are_not_sufficient(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "spatial.pth"
+            path.write_bytes(b"unverified weights")
+            with self.assertRaises(KeyError):
+                policy._checkpoint_state_dict(
+                    {"model_state_dict": {}, "suite": "spatial", "model_name": "TurboVLA"},
+                    checkpoint_path=str(path))
 
 
 if __name__ == "__main__":

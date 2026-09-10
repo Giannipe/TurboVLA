@@ -365,6 +365,10 @@ launch_task_in_slot() {
     local slot_label="slot${slot_idx}_gpu${gpu_id}_port${port}"
     local server_log="${LOG_DIR}/${task_safe}_${TASK_CONFIG}_${slot_label}_server.log"
     local eval_log="${LOG_DIR}/${task_safe}_${TASK_CONFIG}_${slot_label}_eval.log"
+    if [[ "${ROBOTWIN_LOG_TO_STDIO:-0}" == "1" ]]; then
+        server_log="Slurm stdout/stderr"
+        eval_log="Slurm stdout/stderr"
+    fi
 
     echo "[INFO] Launching task=${task_name} mode=${TASK_CONFIG} gpu=${gpu_id} port=${port}"
 
@@ -395,7 +399,11 @@ launch_task_in_slot() {
         sleep 1
         kill_policy_servers_on_port "${port}" KILL
 
-        bash "${SCRIPT_DIR}/run_policy_server.sh" "${CKPT_PATH}" "${gpu_id}" "${port}" > "${server_log}" 2>&1 &
+        if [[ "${ROBOTWIN_LOG_TO_STDIO:-0}" == "1" ]]; then
+            bash "${SCRIPT_DIR}/run_policy_server.sh" "${CKPT_PATH}" "${gpu_id}" "${port}" &
+        else
+            bash "${SCRIPT_DIR}/run_policy_server.sh" "${CKPT_PATH}" "${gpu_id}" "${port}" > "${server_log}" 2>&1 &
+        fi
         server_pid=$!
 
         if ! wait_for_server "${port}" "${ROBOTWIN_SERVER_TIMEOUT:-600}"; then
@@ -404,15 +412,20 @@ launch_task_in_slot() {
         fi
 
         cd "${SCRIPT_DIR}"
-        bash "${SCRIPT_DIR}/eval_task.sh" \
+        eval_command=(bash "${SCRIPT_DIR}/eval_task.sh" \
             "${task_name}" \
             "${TASK_CONFIG}" \
             "${POLICY_NAME}" \
             "${ROBOTWIN_SEED:-0}" \
             "${gpu_id}" \
             "${CKPT_PATH}" \
-            "${port}" \
-            > >(tee "${eval_log}" | grep --line-buffered "Success rate" | sed -u "s/^/[RESULT] ${task_name}: /") 2>&1
+            "${port}")
+        if [[ "${ROBOTWIN_LOG_TO_STDIO:-0}" == "1" ]]; then
+            "${eval_command[@]}"
+        else
+            "${eval_command[@]}" \
+                > >(tee "${eval_log}" | grep --line-buffered "Success rate" | sed -u "s/^/[RESULT] ${task_name}: /") 2>&1
+        fi
     ) &
 
     launched_pid=$!
@@ -505,14 +518,18 @@ check_port_detection
 
 prepare_runtime_dependencies
 
-ckpt_name="$(basename "${CKPT_PATH}")"
-ckpt_stem="${ckpt_name%.*}"
-timestamp="$(date +%Y%m%d_%H%M%S)"
-LOG_DIR="${ROBOTWIN_LOG_ROOT:-$(dirname "${CKPT_PATH}")/robotwin_eval_logs/${POLICY_NAME}_${TASK_CONFIG}_${ckpt_stem}_${timestamp}}"
-if [[ "${LOG_DIR}" != /* ]]; then
-    LOG_DIR="$(pwd)/${LOG_DIR}"
+if [[ "${ROBOTWIN_LOG_TO_STDIO:-0}" == "1" ]]; then
+    LOG_DIR="Slurm stdout/stderr"
+else
+    ckpt_name="$(basename "${CKPT_PATH}")"
+    ckpt_stem="${ckpt_name%.*}"
+    timestamp="$(date +%Y%m%d_%H%M%S)"
+    LOG_DIR="${ROBOTWIN_LOG_ROOT:-$(dirname "${CKPT_PATH}")/robotwin_eval_logs/${POLICY_NAME}_${TASK_CONFIG}_${ckpt_stem}_${timestamp}}"
+    if [[ "${LOG_DIR}" != /* ]]; then
+        LOG_DIR="$(pwd)/${LOG_DIR}"
+    fi
+    mkdir -p "${LOG_DIR}"
 fi
-mkdir -p "${LOG_DIR}"
 
 next_port="${BASE_PORT}"
 for gpu_id in "${CUDA_DEVICES[@]}"; do

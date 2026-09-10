@@ -249,9 +249,18 @@ def get_libero_dummy_action() -> list[float]:
 
 
 # The authors' September 34k EMA export stores its weights under model_state_dict.
-# Allow that exact immutable artifact; retain upstream's EMA requirement for all
+# Allow exact immutable public artifacts; retain upstream's EMA requirement for
 # other checkpoints, including locally trained raw weights.
 _RELEASED_LIBERO_EXPORT_SHA256 = "d031ad7be05a2f5d04afb3194ed26b0cb46083685edee7a5e145078a37d26bab"
+# Historical public release, H-EmbodVis/TurboVLA @ f7b0f53afa248408d20748f2579e446c7ce4119e.
+# Hashes verified against the Hugging Face LFS index. These exports contain
+# model_state_dict only: do not claim or synthesize EMA for the legacy baseline.
+_LEGACY_LIBERO_EXPORTS_SHA256 = {
+    "a7c3faa825a6c68d365df0647c39845c3a7bb553e1e24be3729b76de22f703fa": "spatial",
+    "787c01bd8b328a5948b756aab92f8058a1e0802845a0e1f24506291b9cda59cf": "object",
+    "60070c9b1735e34ea91143f48e2dea2ed8e3b179d586801529ab253fdaa21a8a": "goal",
+    "96123b539df63573860b853d37964f41ae47f1b9cdddd2431fb9095eea4945f3": "long",
+}
 
 
 def _checkpoint_state_dict(
@@ -275,9 +284,17 @@ def _checkpoint_state_dict(
                 "loading model_state_dict (no weight conversion).", flush=True,
             )
             return exported_state
+        legacy_suite = _LEGACY_LIBERO_EXPORTS_SHA256.get(digest.hexdigest())
+        if legacy_suite is not None:
+            print(
+                f"[TurboVLAPolicy] verified official legacy export ({legacy_suite}): "
+                "loading published model_state_dict (no weight conversion; EMA not inferred).",
+                flush=True,
+            )
+            return exported_state
     raise KeyError(
         "LIBERO evaluation requires `ema_model_state_dict`, except for the "
-        "SHA256-verified official September export; unverified raw weights are not used"
+        "SHA256-verified official exports; unverified raw weights are not used"
     )
 
 

@@ -40,6 +40,26 @@ class Pi05AdamW(torch_optim.AdamW):
                 ema_param.mul_(decay).add_(param.detach(), alpha=1.0 - decay)
         return result
 
+    def restore_ema(self, checkpoint):
+        """Restore the separately saved EMA, not fresh clones of resumed raw weights."""
+        state = checkpoint.get("ema_model_state_dict")
+        if not isinstance(state, dict):
+            raise ValueError("resume_mode=all requires ema_model_state_dict for the EMA optimizer")
+        decay = float(checkpoint.get("ema_decay", self.ema_decay))
+        if not 0.0 <= decay < 1.0:
+            raise ValueError(f"invalid EMA decay in checkpoint: {decay}")
+        if len(self._ema_param_names) != len(self._ema_params):
+            raise ValueError("EMA parameter names must be registered before restoring")
+        for param, name in self._ema_param_names.items():
+            value = state.get(name)
+            if not isinstance(value, trainer.torch.Tensor) or value.shape != param.shape:
+                raise ValueError(f"missing or incompatible EMA parameter: {name}")
+        with trainer.torch.no_grad():
+            for param, name in self._ema_param_names.items():
+                self._ema_params[param].copy_(state[name])
+        self.ema_decay = decay
+        return len(self._ema_params)
+
 
 def parse_args_with_dinov3_precision():
     global _DINOV3_PRECISION
@@ -103,7 +123,7 @@ def torch_save_with_pi05_ema(obj, *args, **kwargs):
                     ema_tensor = optimizer._ema_params[param].detach()
                     ema_state[name] = ema_tensor.to(device="cpu", dtype=ema_state[name].dtype)
             obj = dict(obj)
-            obj["ema_decay"] = EMA_DECAY
+            obj["ema_decay"] = optimizer.ema_decay
             obj["ema_model_state_dict"] = ema_state
     return _ORIGINAL_TORCH_SAVE(obj, *args, **kwargs)
 

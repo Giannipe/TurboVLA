@@ -27,6 +27,7 @@ tmp/
 *.safetensors
 *.mp4
 *.log
+MUJOCO_LOG.TXT
 *.out
 *.npy
 *.npz

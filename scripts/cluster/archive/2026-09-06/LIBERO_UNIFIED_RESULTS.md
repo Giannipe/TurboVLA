@@ -59,10 +59,13 @@ stack and original evaluation traces remain unverified. Do not claim that the
 remaining discrepancy is caused by a particular GPU or renderer without a
 controlled comparison.
 
-Training has not started. The updated training recommendation is global batch
-128, but the exact EMA training/update recipe still needs clarification: the
-public trainer does not currently implement/save EMA. Training loss alone is not
-the authors' checkpoint-selection criterion.
+No training was performed in this evaluation run. The updated training
+recommendation is global batch 128. Correction after tracing the complete public
+entry point on 2026-09-06: `train_mixed.py` imports `pi05.py`, which implements
+and saves EMA with decay 0.999. The earlier claim here that EMA was absent was
+incorrect. Training loss alone is not the authors' checkpoint-selection
+criterion. See [TRAINING_SMOKE.md](TRAINING_SMOKE.md) for the subsequent pipeline
+test and the separately identified EMA-resume issue.
 
 Sources:
 

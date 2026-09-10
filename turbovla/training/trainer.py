@@ -584,6 +584,10 @@ def train_model():
         if ckpt is not None and args.resume_mode == "all":
             optimizer.load_state_dict(ckpt["optimizer_state_dict"])
             scheduler.load_state_dict(ckpt["scheduler_state_dict"])
+            if hasattr(optimizer, "restore_ema"):
+                restored = optimizer.restore_ema(ckpt)
+                if rank == 0:
+                    print(f"restored EMA: {restored} tensors, decay={optimizer.ema_decay}", flush=True)
 
         model_to_load = unwrap_model(model)
 
