@@ -5,15 +5,27 @@ vanno in `$SCRATCH_FLASH/TurboVLA`, qui `/mnt/beegfs/gpepe/TurboVLA`.
 I nuovi log vanno in **`/home/gpepe/ws/logs/turbovla/`**: `/ws` da solo non
 esiste su questo cluster. Tutte le operazioni si lanciano con **`sbatch`**.
 
+Per la nuova estensione **LIBERO+ solo evaluation**, con ambiente separato
+`turbovla-liberoplus`, vedere [LIBEROPLUS.md](LIBEROPLUS.md). I launcher
+`assets.sh`, `envs.sh` e `evaluate.sh` accettano `--benchmark liberoplus`;
+`train.sh` no. In `assets.sh` e `envs.sh`, `--benchmark all` resta LIBERO +
+RoboTwin, non include LIBERO+. In evaluation usare un benchmark esplicito e
+`--suite all` per le quattro suite LIBERO/LIBERO+.
+Stato LIBERO+: asset scaricati, estratti e verificati; ambiente isolato installato
+e controlli CPU passati (job 1930349, exit 0), 57 test locali passati.
+GPU/rendering e rollout verificati su Spatial e Object, completate l'11 settembre;
+Goal e Long rilanciate il 15 settembre nel job 1938718, dopo il timeout del primo
+run. Risultati parziali e limite noto grayscale sono nella guida.
+
 | File | Funzione |
 |---|---|
-| [envs.sh](envs.sh) | Crea/aggiorna gli ambienti policy LIBERO/RoboTwin; installa LIBERO già scaricato |
+| [envs.sh](envs.sh) | Crea/aggiorna gli ambienti LIBERO/RoboTwin; per LIBERO+ crea un clone separato e installa il simulatore già scaricato |
 | [assets.sh](assets.sh) | Scarica, riprende e verifica modelli, checkpoint, dataset e asset dei simulatori |
 | [evaluate.sh](evaluate.sh) | Valuta un checkpoint esplicito, con i default del protocollo rilasciato |
 | [train.sh](train.sh) | Avvia il training congiunto con default documentati e configurazione modificabile |
 
 Ogni `.sh` contiene le proprie direttive `#SBATCH`: non servono submitter o
-altri file `.sbatch`. Il suffisso `.sh` è valido per Slurm. I tre Python in
+altri file `.sbatch`. Il suffisso `.sh` è valido per Slurm. I quattro Python in
 `_internal/` sono implementazione condivisa, **non ulteriori comandi operativi**.
 Non esiste più `--submit`: è `sbatch` a inviare il job. Con `bash` sono consentiti
 soltanto `--help` e `--dry-run`, per evitare esecuzioni accidentali sul login node.

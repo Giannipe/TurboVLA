@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Evaluate one compatible TurboVLA checkpoint: LIBERO or RoboTwin clean50.
+"""Evaluate one compatible TurboVLA checkpoint: LIBERO, LIBERO+ or RoboTwin clean50.
 
 Default LIBERO protocol: seed 7, 50 trials/task, chunk/open-loop 12, BF16, EGL.
+LIBERO+ reuses that policy configuration with one trial per perturbation variant.
 --suite all evaluates the four suites sequentially within the current job.
 Checkpoint must be trusted and compatible with the selected upstream evaluator.
 """
@@ -31,10 +32,10 @@ LIBERO_DEFAULTS = dict(
 
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--benchmark", choices=["libero", "robotwin"], required=True)
+    p.add_argument("--benchmark", choices=["libero", "robotwin", "liberoplus"], required=True)
     p.add_argument("--checkpoint", type=Path, required=True, help="Any compatible trusted checkpoint; never selected implicitly")
     p.add_argument("--suite", choices=["all", *assets.SUITES], default="all", help="LIBERO suite")
-    p.add_argument("--trials", type=int, help="Default 50 LIBERO / 100 RoboTwin")
+    p.add_argument("--trials", type=int, help="Default 50 LIBERO / 1 LIBERO+ / 100 RoboTwin")
     p.add_argument("--seed", type=int, default=7, help="LIBERO evaluation seed")
     p.add_argument("--chunk-size", type=int, default=12)
     p.add_argument("--open-loop-steps", type=int, default=12)
@@ -56,11 +57,12 @@ def parser():
 
 def libero_config(args, suite, output, source=assets.ROOT):
     cfg = dict(LIBERO_DEFAULTS)
-    cfg.update(num_trials_per_task=args.trials or 50, seed=args.seed, chunk_size=args.chunk_size,
+    cfg.update(num_trials_per_task=args.trials or (1 if args.benchmark == "liberoplus" else 50), seed=args.seed, chunk_size=args.chunk_size,
                num_open_loop_steps=args.open_loop_steps, precision=args.precision,
                save_video=args.save_video, task_ids=args.task_ids)
     cfg = assets.overrides(cfg, args.set)
-    cfg.update(ckpt_path=str(args.checkpoint), libero_root=str(args.store / "simulators/LIBERO"),
+    simulator_name = "LIBERO-plus" if args.benchmark == "liberoplus" else "LIBERO"
+    cfg.update(ckpt_path=str(args.checkpoint), libero_root=str(args.store / "simulators" / simulator_name),
                dinov3_path=str(args.store / "models/dinov3-vitb16"), bert_path=str(args.store / "models/bert-base-uncased"),
                stats_path=str(args.stats_path or source / "experiments/libero/configs/libero_all4_stats.json"),
                task_suite_name=suite, mujoco_gl=args.renderer, pyopengl_platform=args.renderer,
@@ -90,7 +92,7 @@ def main(argv=None):
         args.robotwin_root = args.robotwin_root.resolve()
     args.output = (args.output or args.store / "results" / args.benchmark / assets.run_name("evaluate", args.benchmark)).resolve()
     assets.require(args.trials is None or args.trials > 0, "trials must be positive")
-    assets.require(args.benchmark != "libero" or args.gpus == 1, "LIBERO uses one GPU per evaluation job")
+    assets.require(args.benchmark == "robotwin" or args.gpus == 1, "LIBERO/LIBERO+ uses one GPU per evaluation job")
     if args.benchmark == "robotwin":
         assets.require(args.robotwin_root and args.robotwin_python, "RoboTwin needs --robotwin-root and --robotwin-python")
         assets.require(not args.set and not args.load_only and not args.task_ids and not args.stats_path,
@@ -112,14 +114,22 @@ def main(argv=None):
             assets.verify(args.benchmark, ["models"], args.store)
         if args.benchmark == "libero":
             assets.libero_simulator(args.store, download=False)
-    for suite in suites if args.benchmark == "libero" else ["clean50"]:
+        elif args.benchmark == "liberoplus":
+            import liberoplus
+            liberoplus.prepare(args.store, download=False)
+    for suite in suites if args.benchmark != "robotwin" else ["clean50"]:
         output = args.output / suite
         source = assets.ROOT if args.dry_run else output / "source"
         env = assets.runtime_env(args.store, source)
         env.update(MUJOCO_GL=args.renderer, PYOPENGL_PLATFORM=args.renderer)
-        if args.benchmark == "libero":
+        if args.benchmark == "liberoplus":
+            env["LIBERO_CONFIG_PATH"] = str(args.store / "config/liberoplus")
+        if args.benchmark != "robotwin":
             cfg = libero_config(args, suite, output, source)
             command = command_for(cfg, source)
+            if args.benchmark == "liberoplus":
+                print(f"LIBERO+ evaluation only: {cfg['num_trials_per_task']} rollout(s)/variant; "
+                      f"text_padding_length={cfg['text_padding_length']} (long instructions can be truncated)", flush=True)
         else:
             cfg = {"checkpoint": str(args.checkpoint), "trials": args.trials or 100, "tasks": args.tasks or ["all"]}
             env.update(ROBOTWIN_PATH=str(args.robotwin_root), ROBOTWIN_PYTHON=str(args.robotwin_python.resolve()),
@@ -135,12 +145,17 @@ def main(argv=None):
             continue
         assets.record_run(output, command, cfg)
         assets.snapshot(source)
+        if args.benchmark == "liberoplus":
+            import liberoplus
+            assets.write_json(output / "benchmark.json", {"benchmark": "liberoplus", "revision": liberoplus.REVISION,
+                "suite_counts": liberoplus.COUNTS, "classification_ids": "one-based; rollout task_id is zero-based",
+                "text_padding_length": cfg["text_padding_length"]})
         # These caches are node-local and automatically removed after the run.
         assets.write_json(output / "checkpoint.json", {"path": str(args.checkpoint), "sha256": assets.digest(args.checkpoint)})
         with tempfile.TemporaryDirectory(prefix="turbovla-eval-") as cache:
             env.update(MPLCONFIGDIR=str(Path(cache) / "matplotlib"), NUMBA_CACHE_DIR=str(Path(cache) / "numba"))
             subprocess.run(command, cwd=source, env=env, check=True)
-        if args.benchmark == "libero" and not args.load_only:
+        if args.benchmark != "robotwin" and not args.load_only:
             result = json.loads((output / "results.json").read_text())
             print(json.dumps(result, indent=2))
 

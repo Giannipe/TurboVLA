@@ -12,10 +12,10 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Create the two Python 3.10 environments used by TurboVLA.
+Create TurboVLA Python 3.10 environments. LIBERO+ is evaluation-only and isolated.
 
 Usage:
-  sbatch scripts/cluster/envs.sh --benchmark {libero|robotwin|all} [options]
+  sbatch scripts/cluster/envs.sh --benchmark {libero|robotwin|all|liberoplus} [options]
   bash scripts/cluster/envs.sh --help
 
 Options:
@@ -29,6 +29,7 @@ Options:
 Environment overrides:
   TURBOVLA_LIBERO_ENV             default: turbovla-libero
   TURBOVLA_ROBOTWIN_ENV           default: turbovla-robotwin
+  TURBOVLA_LIBEROPLUS_ENV         default: turbovla-liberoplus (clones LIBERO)
   PYTORCH_LIBERO_INDEX_URL        default: https://download.pytorch.org/whl/cu121
   PYTORCH_ROBOTWIN_INDEX_URL      default: https://download.pytorch.org/whl/cu124
   FLASH_ATTN_MAX_JOBS             default: 8
@@ -49,7 +50,7 @@ with_flash_attn=false
 while (($#)); do
   case "$1" in
     --benchmark)
-      (($# >= 2)) || die "--benchmark requires libero, robotwin, or all"
+      (($# >= 2)) || die "--benchmark requires libero, robotwin, all, or liberoplus"
       target="$2"
       shift
       ;;
@@ -77,12 +78,13 @@ while (($#)); do
   shift
 done
 case "$target" in
-  libero|robotwin|all) ;;
+  libero|robotwin|all|liberoplus) ;;
   *) die "unknown benchmark: $target" ;;
 esac
 [[ "$simulator_only" != true || "$target" == libero ]] || die "--simulator-only requires --benchmark libero"
 [[ "$with_flash_attn" != true || "$target" != libero ]] || die "--with-flash-attn requires --benchmark robotwin or all"
 [[ "$simulator_only" != true || "$with_flash_attn" != true ]] || die "--simulator-only cannot install FlashAttention"
+[[ "$target" != liberoplus || "$with_flash_attn" != true ]] || die "LIBERO+ does not use FlashAttention"
 
 # Under sbatch this script is copied into Slurm's spool, so BASH_SOURCE is
 # NOT the repository location. Always use the configured real checkout.
@@ -91,6 +93,10 @@ repo_root="${TURBOVLA_REPO:-/home/gpepe/ws/TurboVLA}"
 
 libero_env="${TURBOVLA_LIBERO_ENV:-turbovla-libero}"
 robotwin_env="${TURBOVLA_ROBOTWIN_ENV:-turbovla-robotwin}"
+liberoplus_env="${TURBOVLA_LIBEROPLUS_ENV:-turbovla-liberoplus}"
+if [[ "$target" == liberoplus ]]; then
+  [[ "$liberoplus_env" != "$libero_env" && "$liberoplus_env" != "$robotwin_env" ]] || die "LIBERO+ needs a distinct environment name"
+fi
 libero_torch_index="${PYTORCH_LIBERO_INDEX_URL:-https://download.pytorch.org/whl/cu121}"
 robotwin_torch_index="${PYTORCH_ROBOTWIN_INDEX_URL:-https://download.pytorch.org/whl/cu124}"
 flash_attn_max_jobs="${FLASH_ATTN_MAX_JOBS:-8}"
@@ -98,6 +104,9 @@ flash_attn_max_jobs="${FLASH_ATTN_MAX_JOBS:-8}"
 if [[ "$dry_run" == true ]]; then
   printf 'Environment plan: benchmark=%s, repo=%s\n' "$target" "$repo_root"
   printf 'LIBERO=%s; RoboTwin=%s; flash-attn=%s; simulator-only=%s\n' "$libero_env" "$robotwin_env" "$with_flash_attn" "$simulator_only"
+  if [[ "$target" == liberoplus ]]; then
+    printf 'LIBERO+=%s; clone=%s; install pinned simulator and extra requirements; no training\n' "$liberoplus_env" "$libero_env"
+  fi
   exit 0
 fi
 [[ -n "${SLURM_JOB_ID:-}" ]] || die "Use sbatch scripts/cluster/envs.sh ...; bash is only for --help/--dry-run"
@@ -268,6 +277,36 @@ install_libero_simulator() {
   LIBERO_CONFIG_PATH="$store/config/libero" run_in_env "$libero_env" python -c 'from libero.libero import benchmark; assert benchmark.get_benchmark_dict()["libero_spatial"]().n_tasks == 10; print("LIBERO import OK")'
 }
 
+install_liberoplus() {
+  local store="${TURBOVLA_STORE:-${SCRATCH_FLASH:-/mnt/beegfs/gpepe}/TurboVLA}"
+  local simulator="$store/simulators/LIBERO-plus"
+  [[ -f "$simulator/setup.py" && -f "$store/config/liberoplus/config.yaml" ]] \
+    || die "First complete sbatch scripts/cluster/assets.sh --benchmark liberoplus"
+  env_exists "$libero_env" || die "The validated LIBERO environment is required as clone source"
+  # Never reinstall or uninstall anything in the source environment.
+  if ! env_exists "$liberoplus_env"; then
+    conda create --name "$liberoplus_env" --clone "$libero_env" -y
+  fi
+  local clone_python
+  clone_python="$(run_in_env "$liberoplus_env" python -c 'import sys; print(sys.executable)')"
+  PYTHONPATH="$repo_root/scripts/cluster/_internal" \
+    run_in_env "$libero_env" python -B -c \
+    'import sys, liberoplus; liberoplus.ensure_clone_pip(sys.executable, sys.argv[1])' "$clone_python"
+  run_in_env "$liberoplus_env" python -c \
+    'import ctypes, ctypes.util; [ctypes.CDLL(ctypes.util.find_library(n) or "MISSING-"+n) for n in ("MagickWand-6.Q16", "expat", "fontconfig")]; print("ImageMagick/expat/fontconfig runtime libraries OK")'
+  # Upstream extra_requirements.txt requests wand and scikit-image without pins.
+  # These are our Python 3.10-compatible pins; preserve the validated NumPy/Torch stack.
+  run_in_env "$liberoplus_env" python -m pip install --disable-pip-version-check \
+    numpy==1.26.4 wand==0.6.13 scikit-image==0.24.0
+  run_in_env "$liberoplus_env" python -m pip install --disable-pip-version-check --no-deps -e "$simulator"
+  conda env config vars set -n "$liberoplus_env" LIBERO_CONFIG_PATH="$store/config/liberoplus" MUJOCO_GL=egl PYOPENGL_PLATFORM=egl
+  run_in_env "$liberoplus_env" python -m pip check
+  # Do not inject the simulator checkout: validate the actual editable installation.
+  LIBERO_CONFIG_PATH="$store/config/liberoplus" PYTHONPATH="$repo_root/scripts/cluster/_internal" \
+    run_in_env "$liberoplus_env" python -c \
+    'from pathlib import Path; import sys, liberoplus; liberoplus.validate_environment(Path(sys.argv[1]))' "$store"
+}
+
 if [[ "$simulator_only" == true ]]; then
   [[ "$target" == libero ]] || die "--simulator-only requires --benchmark libero"
   install_libero_simulator
@@ -275,6 +314,9 @@ if [[ "$simulator_only" == true ]]; then
 fi
 
 case "$target" in
+  liberoplus)
+    install_liberoplus
+    ;;
   libero)
     install_libero
     ;;
@@ -291,15 +333,21 @@ echo
 echo "Environment setup completed."
 echo "  LIBERO:  conda activate $libero_env"
 echo "  RoboTwin: conda activate $robotwin_env"
+echo "  LIBERO+:  conda activate $liberoplus_env"
 
 store="${TURBOVLA_STORE:-${SCRATCH_FLASH:-/mnt/beegfs/gpepe}/TurboVLA}"
 mkdir -p "$store/manifests/environments"
-for name in "$libero_env" "$robotwin_env"; do
+for name in "$libero_env" "$robotwin_env" "$liberoplus_env"; do
   if env_exists "$name"; then
     conda list -n "$name" --explicit > "$store/manifests/environments/$name.conda-explicit.txt"
     run_in_env "$name" python -m pip freeze > "$store/manifests/environments/$name.pip-freeze.txt"
   fi
 done
-echo "Next: sbatch scripts/cluster/assets.sh --benchmark $target"
-echo "LIBERO after download: sbatch scripts/cluster/envs.sh --benchmark libero --simulator-only"
-echo "RoboTwin simulator requires its separate official installation/environment."
+if [[ "$target" == liberoplus ]]; then
+  echo "LIBERO+ CPU setup checks completed; GPU rendering/rollouts still need a diagnostic evaluation."
+  echo "Next: see scripts/cluster/LIBEROPLUS.md (Evaluation TurboVLA); assets do not need downloading again."
+else
+  echo "Next: sbatch scripts/cluster/assets.sh --benchmark $target"
+  echo "LIBERO after download: sbatch scripts/cluster/envs.sh --benchmark libero --simulator-only"
+  echo "RoboTwin simulator requires its separate official installation/environment."
+fi

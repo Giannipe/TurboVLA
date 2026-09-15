@@ -49,7 +49,7 @@ if [[ "${SLURM_JOB_NUM_NODES:-1}" != 1 || "${SLURM_NTASKS:-1}" != 1 ]]; then
   exit 2
 fi
 case "$benchmark" in
-  libero|all) environment="${TURBOVLA_LIBERO_ENV:-turbovla-libero}" ;;
+  libero|all|liberoplus) environment="${TURBOVLA_LIBERO_ENV:-turbovla-libero}" ;;
   robotwin) environment="${TURBOVLA_ROBOTWIN_ENV:-turbovla-robotwin}" ;;
   *) echo "Unknown benchmark: $benchmark" >&2; exit 2 ;;
 esac

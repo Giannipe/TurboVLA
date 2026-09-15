@@ -33,6 +33,7 @@ CONFIG_HASHES = {
 
 # name: benchmark, component, HF repository, type, revision, local path, patterns
 CATALOG = {
+    "liberoplus_sim_assets": ("liberoplus", "simulators", "Sylvest/LIBERO-plus", "dataset", "dd2bd61b7d9a6fef1abc52d606e983b41886a149", "simulator_assets/liberoplus", ["assets.zip"]),
     "dino_b": ("libero", "models", "facebook/dinov3-vitb16-pretrain-lvd1689m", "model", "5931719e67bbdb9737e363e781fb0c67687896bc", "models/dinov3-vitb16", ["config.json", "preprocessor_config.json", "model.safetensors"]),
     "dino_l": ("robotwin", "models", "facebook/dinov3-vitl16-pretrain-lvd1689m", "model", "ea8dc2863c51be0a264bab82070e3e8836b02d51", "models/dinov3-vitl16", ["config.json", "preprocessor_config.json", "model.safetensors"]),
     "bert": ("all", "models", "google-bert/bert-base-uncased", "model", "86b5e0934494bd15c9632b12f734a8a67f723594", "models/bert-base-uncased", ["config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json", "vocab.txt"]),
@@ -44,6 +45,7 @@ CATALOG = {
     "robotwin_sim_assets": ("robotwin", "simulators", "TianxingChen/RoboTwin2.0", "dataset", "9dc9299c163db059931898a9f0852098a61155a1", "simulator_assets/robotwin", ["background_texture.zip", "embodiments.zip", "objects.zip"]),
 }
 HASH_LOCKS = {
+    "simulator_assets/liberoplus/assets.zip": "96764a4bfbdaea98d4411598caeab235458318fe0f549611b93d1a323027b3cf",
     "models/groundingdino/groundingdino_swint_ogc.pth": "3b3ca2563c77c69f651d7bd133e97139c186df06231157a64c507099c52bc799",
     "models/dinov3-vitb16/model.safetensors": "9a21ac3df0c63839d62612dda6f454d816c25611cc7a52966ed5a5a94921dc8b",
     "models/bert-base-uncased/model.safetensors": "68d45e234eb4a928074dfd868cead0219ab85354cc53d20e772753c6bb9169d3",
@@ -94,8 +96,14 @@ def locked(path):
 
 
 def selected(benchmark, components):
+    if benchmark == "liberoplus":
+        # Evaluation only: reuse LIBERO backbones/weights, never download RLDS or LeRobot data.
+        return {name: spec for name, spec in CATALOG.items()
+                if name in ("dino_b", "bert", "libero_checkpoint", "liberoplus_sim_assets")
+                and spec[1] in components}
     return {name: spec for name, spec in CATALOG.items()
-            if (benchmark == "all" or spec[0] in (benchmark, "all")) and spec[1] in components}
+            if spec[0] != "liberoplus" and (benchmark == "all" or spec[0] in (benchmark, "all"))
+            and spec[1] in components}
 
 
 def expected_files(name, spec, store, online=False):
@@ -179,7 +187,7 @@ def verify(benchmark, components, store, online=False):
         entries, origin = expected_files(name, spec, store, online)
         report["assets"][name] = verify_asset(name, spec, store, entries, origin)
         print(f"[verified] {name}: {len(entries)} files", flush=True)
-    if benchmark in ("libero", "all"):
+    if benchmark in ("libero", "liberoplus", "all"):
         for name, expected in CONFIG_HASHES.items():
             require(digest(ROOT / "experiments/libero/configs" / name) == expected, f"Released config changed: {name}")
     return report
@@ -275,7 +283,7 @@ def overrides(config, values):
 def check_environment(benchmark, training=False):
     from importlib.metadata import version
     expected = {"torch": "2.3.1", "torchvision": "0.18.1", "transformers": "4.56.0",
-                "tensorflow": "2.20.0", "tensorflow-datasets": "4.9.3"} if benchmark == "libero" else {
+                "tensorflow": "2.20.0", "tensorflow-datasets": "4.9.3"} if benchmark in ("libero", "liberoplus") else {
                     "torch": "2.6.0", "torchvision": "0.21.0", "transformers": "4.57.0"}
     for name, wanted in expected.items():
         require(version(name).split("+")[0] == wanted, f"Expected {name}=={wanted}, got {version(name)}")
@@ -291,7 +299,7 @@ def snapshot(destination):
     (destination / "scripts/cluster/_internal").mkdir(parents=True, exist_ok=True)
     for name in ("assets.sh", "evaluate.sh", "train.sh", "envs.sh"):
         shutil.copyfile(ROOT / "scripts/cluster" / name, destination / "scripts/cluster" / name)
-    for name in ("assets.py", "evaluate.py", "train.py"):
+    for name in ("assets.py", "evaluate.py", "train.py", "liberoplus.py"):
         shutil.copyfile(ROOT / "scripts/cluster/_internal" / name, destination / "scripts/cluster/_internal" / name)
 
 
@@ -309,7 +317,7 @@ def record_run(directory, command, config, source=ROOT):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--benchmark", choices=["libero", "robotwin", "all"], required=True)
+    parser.add_argument("--benchmark", choices=["libero", "robotwin", "all", "liberoplus"], required=True)
     parser.add_argument("--components", nargs="+", choices=["models", "datasets", "checkpoints", "simulators"],
                         default=["models", "datasets", "checkpoints", "simulators"])
     parser.add_argument("--verify-only", action="store_true", help="Read-only verification, no payload downloads")
@@ -324,7 +332,11 @@ def main(argv=None):
         for name, spec in selected(args.benchmark, args.components).items():
             print(f"{name}: {spec[2]} @ {spec[4]} -> {args.store / spec[5]}")
         if "simulators" in args.components:
-            print(f"LIBERO source (if selected): {LIBERO_REV}; RoboTwin simulator installation remains separate")
+            if args.benchmark == "liberoplus":
+                import liberoplus
+                print(f"LIBERO+ source: {liberoplus.REVISION}; extract assets.zip, separate config; evaluation only")
+            else:
+                print(f"LIBERO source (if selected): {LIBERO_REV}; RoboTwin simulator installation remains separate")
         return
     os.environ.update(HF_HUB_CACHE=str(args.store / "cache/huggingface/hub"),
                       HF_XET_CACHE=str(args.store / "cache/huggingface/xet"), HF_HUB_DISABLE_TELEMETRY="1")
@@ -351,10 +363,13 @@ def main(argv=None):
                 report["assets"][name] = verify_asset(name, spec, args.store, entries, origin)
                 write_json(args.store / "manifests/asset_indexes" / f"{name}-{spec[4]}.json",
                            {"repo": spec[2], "revision": spec[4], "files": entries})
-        if args.benchmark in ("libero", "all"):
+        if args.benchmark in ("libero", "liberoplus", "all"):
             for name, expected in CONFIG_HASHES.items():
                 require(digest(ROOT / "experiments/libero/configs" / name) == expected, f"Released config changed: {name}")
     if "simulators" in args.components:
+        if args.benchmark == "liberoplus":
+            import liberoplus
+            report["liberoplus_simulator"] = liberoplus.prepare(args.store, download=not args.verify_only)
         if args.benchmark in ("libero", "all"):
             report["libero_simulator"] = libero_simulator(args.store, not args.verify_only)
         if args.benchmark in ("robotwin", "all"):

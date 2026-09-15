@@ -14,8 +14,9 @@ per questo li conserviamo.
 | [test_libero_training_recipe.py](test_libero_training_recipe.py) | 3 | Confronta i flag generati con il parser reale del training pubblico, adattando i percorsi locali e l'orizzonte LR equivalente. Verifica batch globale 128 su quattro GPU; variante batch 256 che cambia solo il batch per GPU; configurazione breve che mantiene schedule 80k, worker e accumulo. |
 | [test_libero_export_compat.py](test_libero_export_compat.py) | 7 | Priorità ai pesi EMA; rifiuto di contenitori non validi o raw non verificati; accettazione delle eccezioni SHA256 per export unified/legacy senza trasformare i pesi; nome file e metadati da soli non bastano. Usa fixture sintetiche e hash autorizzati simulati. |
 | [test_training_ema_resume.py](test_training_ema_resume.py) | 4 | Formula EMA con decay 0,999; continuità esatta di AdamW/EMA in un piccolo esempio CPU interrotto e ripreso; rifiuto di EMA mancante o forma incompatibile. |
+| [test_liberoplus_cli.py](test_liberoplus_cli.py) | 19 | Asset evaluation e separazione da LIBERO; soli cambi di protocollo previsti e compatibilità con il parser reale upstream; dry-run offline; nomi BDDL virtuali; estrazione diretta/prefissata e rifiuto di percorsi non sicuri, symlink, collisioni e directory preesistenti; integrità strutturale del manifest e lock solo sulle scritture; riparazione pip simulata limitata al clone, senza reinstallazione se sano né disinstallazione se il download fallisce; protezione dei nomi env senza interferire con altri benchmark; fixture RGB non grayscale a 256 px. |
 
-Totale: **38 test**. Alcuni contengono più sottocasi. Il test RoboTwin usa
+Totale: **57 test**. Alcuni contengono più sottocasi. Il test RoboTwin usa
 processi/simulatori finti: non è una evaluation robotica. Il test della ricetta
 breve controlla solo gli argomenti, non avvia tre step di DDP.
 
@@ -40,7 +41,7 @@ Per un solo gruppo, ad esempio EMA:
 python -B -m unittest discover -s tests -p 'test_training_ema_resume.py' -v
 ```
 
-Esito corretto: `Ran 38 tests` e `OK` per la suite completa, codice di uscita 0.
+Esito corretto: `Ran 57 tests` e `OK` per la suite completa, codice di uscita 0.
 Warning di libreria in importazione non equivalgono a un test fallito:
 controllare eventuali `FAIL`/`ERROR` e il riepilogo conclusivo.
 
@@ -56,6 +57,7 @@ Gli import possono inizializzare cache di libreria. `-B` evita i `.pyc`.
 - I test sintetici degli hash non certificano i pesi/dataset realmente scaricati.
   Per questi usare `sbatch scripts/cluster/assets.sh --benchmark all --verify-only --online`
   e controllarne l'esito; `--online` confronta gli indici remoti delle revisioni fissate.
+  LIBERO+ è escluso da `all`: verificarlo separatamente con `--benchmark liberoplus`.
 - Non misurano success rate, equivalenza al paper o assenza di instabilità MuJoCo.
 - Il piccolo test EMA non prova una ripresa distribuita bit-per-bit, né il
   ripristino completo dell'ordine dati/RNG del training.
