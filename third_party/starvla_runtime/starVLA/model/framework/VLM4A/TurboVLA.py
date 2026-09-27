@@ -98,6 +98,7 @@ class TurboVLAFramework(baseframework):
         super().__init__()
         self.config = merge_framework_config(TurboVLADefaultConfig, config)
         fw = self.config.framework
+        self._historical_all50 = self._align_historical_all50_config(fw)
         self.model = build_turbovla(self._core_config(fw))
         self.image_processor = AutoImageProcessor.from_pretrained(
             fw.vision.model_path,
@@ -113,8 +114,69 @@ class TurboVLAFramework(baseframework):
             self._load_initialization(fw.initialization)
 
     @staticmethod
+    def _align_historical_all50_config(fw) -> bool:
+        """Interpret the 200k all50 checkpoint schema using the shared TurboVLA model."""
+        if fw.get("dinov3") is None:
+            return False
+
+        dino = fw.dinov3
+        fusion = fw.fusion
+        action = fw.action_model
+        groundingdino = fw.groundingdino
+        if str(fw.text.get("encoder_type", "bert")).lower() != "bert":
+            raise ValueError("Only BERT checkpoints are supported by this RoboTwin path")
+        if str(action.get("action_model_type", "act")).lower() != "act":
+            raise ValueError("Only ACT checkpoints are supported by this RoboTwin path")
+        if int(action.get("act_hidden_dim", fusion.hidden_dim)) != int(fusion.hidden_dim):
+            raise ValueError("ACT and fusion hidden dimensions must match")
+        if int(action.get("act_nheads", fusion.nheads)) != int(fusion.nheads):
+            raise ValueError("ACT and fusion attention-head counts must match")
+
+        fw.text.bert_path = fw.text.get("model_path") or fw.text.bert_path
+        fw.vision.model_path = dino.model_path
+        fw.vision.image_size = dino.image_size
+        fw.vision.num_views = dino.num_views
+        fw.vision.local_files_only = dino.local_files_only
+        fw.vision.freeze_vision_encoder = dino.freeze_vision_encoder
+        fw.vision.attn_implementation = dino.get("attn_implementation")
+        fw.vision.position_init_std = dino.vision_pos_init_std
+        fw.vision.position_scale_init = dino.vision_pos_scale_init
+        fw.vision.dropout = dino.vision_dropout
+
+        fw.interaction.hidden_dim = fusion.hidden_dim
+        fw.interaction.nheads = fusion.nheads
+        fw.interaction.dim_feedforward = action.act_dim_feedforward
+        fw.interaction.enhancer_inner_dim = fusion.enhancer_inner_dim
+        fw.interaction.num_layers = fusion.num_layers
+        fw.interaction.text_dropout = fusion.text_dropout
+        fw.interaction.fusion_dropout = fusion.fusion_dropout
+        fw.interaction.fusion_droppath = fusion.fusion_droppath
+        fw.interaction.padding_strategy = "zero_fill"
+        fw.interaction.residual_style = "pre_norm"
+        fw.interaction.attention_backend = "sdpa"
+        fw.interaction.compute_precision = "bf16_autocast"
+
+        fw.action.action_dim = action.action_dim
+        fw.action.state_dim = action.state_dim
+        fw.action.horizon = action.action_horizon
+        fw.action.num_layers = action.act_num_layers
+        fw.action.num_state_tokens = action.act_state_tokens
+        fw.action.state_hidden_dim = action.act_state_hidden_dim
+        fw.action.mlp_hidden_dim = action.act_mlp_hidden_dim
+        fw.action.dropout = action.act_dropout
+        fw.action.loss_type = action.act_loss_type
+
+        fw.initialization.pretrained_ckpt = groundingdino.pretrained_ckpt
+        fw.initialization.load_pretrained = groundingdino.load_pretrained
+        fw.initialization.load_bert = groundingdino.load_bert
+        fw.initialization.load_text_projection = groundingdino.load_text_proj
+        fw.initialization.load_interaction = groundingdino.load_feature_enhancer
+        return True
+
+    @staticmethod
     def _core_config(fw) -> TurboVLAConfig:
         return TurboVLAConfig(
+            compatibility_profile="robotwin",
             text=TextEncoderConfig(
                 model_name_or_path=fw.text.bert_path,
                 max_length=int(fw.text.max_text_len),
@@ -173,6 +235,50 @@ class TurboVLAFramework(baseframework):
                 if isinstance(checkpoint.get(key), dict):
                     return checkpoint[key]
         return checkpoint
+
+    @staticmethod
+    def _historical_all50_key(key: str) -> str:
+        """Map an all50 checkpoint tensor to the shared TurboVLA module layout."""
+        exact = {
+            "view_embed": "model.view_embedding",
+            "vision_pos_embed": "model.patch_position_embedding",
+            "vision_pos_scale": "model.patch_position_scale",
+            "action_model.state_proj.pos": "model.action_head.state_projection.position",
+        }
+        if key in exact:
+            return exact[key]
+        prefixes = (
+            ("text_encoder.bert.", "model.text_encoder.bert."),
+            ("text_encoder.text_proj.", "model.text_encoder.text_projection."),
+            ("dinov3.model.", "model.vision_encoder.backbone."),
+            ("vision_proj.norm_in.", "model.vision_projection.input_norm."),
+            ("vision_proj.norm_out.", "model.vision_projection.output_norm."),
+            ("vision_proj.mlp.", "model.vision_projection.mlp."),
+            ("vision_proj.skip.", "model.vision_projection.skip."),
+            ("feature_enhancer.", "model.vision_language_interaction."),
+            ("action_model.state_proj.net.", "model.action_head.state_projection.net."),
+            ("action_model.state_proj.out_norm.", "model.action_head.state_projection.output_norm."),
+            ("action_model.action_policy.action_queries.", "model.action_head.decoder.action_queries."),
+            ("action_model.action_policy.decoder.", "model.action_head.decoder.decoder."),
+            ("action_model.action_policy.action_head.layers.", "model.action_head.decoder.action_projection.layers."),
+        )
+        for source, target in prefixes:
+            if key.startswith(source):
+                return target + key[len(source):]
+        raise KeyError(f"Unrecognized historical all50 checkpoint tensor: {key}")
+
+    def load_state_dict(self, state_dict, strict=True, assign=False):
+        if self._historical_all50 and state_dict and not any(
+            key.startswith("model.") for key in state_dict
+        ):
+            translated = {}
+            for key, value in state_dict.items():
+                target = self._historical_all50_key(key)
+                if target in translated:
+                    raise ValueError(f"Duplicate mapped checkpoint tensor: {target}")
+                translated[target] = value
+            state_dict = translated
+        return super().load_state_dict(state_dict, strict=strict, assign=assign)
 
     def _load_initialization(self, init_cfg) -> None:
         path = str(init_cfg.pretrained_ckpt)

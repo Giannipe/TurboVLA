@@ -1397,10 +1397,12 @@ class LeRobotSingleDataset(Dataset):
 
     def _pack_sample(self, data: dict) -> dict:
         """Pack transformed modality data into training sample format."""
+        image_size = self.data_cfg.get("obs_image_size", [224, 224]) if self.data_cfg is not None else [224, 224]
+        resize_to = (int(image_size[1]), int(image_size[0]))
         step_images = []
         for video_key in self.modality_keys["video"]:
             image = data[video_key][0]
-            image = Image.fromarray(image).resize((224, 224))
+            image = Image.fromarray(image).resize(resize_to)
             step_images.append(image)
 
         language = data[self.modality_keys["language"][0]][0]

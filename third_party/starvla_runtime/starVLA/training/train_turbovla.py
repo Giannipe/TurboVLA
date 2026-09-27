@@ -1,4 +1,4 @@
-"""Train ACT on RoboTwin with a pi0.5-style optimizer recipe and EMA checkpoints."""
+"""Train TurboVLA on task-balanced RoboTwin all50 with EMA checkpoints."""
 
 import argparse
 import os
@@ -109,7 +109,7 @@ def main():
     parser.add_argument(
         "--config_yaml",
         type=str,
-        default="experiments/robotwin/configs/clean50.yaml",
+        default="experiments/robotwin/configs/taskbalanced_all50.yaml",
         help="Path to YAML config",
     )
     args, clipargs = parser.parse_known_args()

@@ -65,6 +65,7 @@ class ActionHeadConfig:
 @dataclass
 class TurboVLAConfig:
     name: str = "TurboVLA"
+    compatibility_profile: str = "libero"
     text: TextEncoderConfig = field(default_factory=TextEncoderConfig)
     vision: VisionEncoderConfig = field(default_factory=VisionEncoderConfig)
     interaction: InteractionConfig = field(default_factory=InteractionConfig)
@@ -73,6 +74,11 @@ class TurboVLAConfig:
     def __post_init__(self) -> None:
         if self.name != "TurboVLA":
             raise ValueError(f"model name must be 'TurboVLA', got {self.name!r}")
+        if self.compatibility_profile not in {"libero", "robotwin"}:
+            raise ValueError(
+                "compatibility_profile must be 'libero' or 'robotwin', "
+                f"got {self.compatibility_profile!r}"
+            )
         if self.vision.num_views < 1:
             raise ValueError("vision.num_views must be positive")
         if self.vision.position_embedding not in {"view", "learned_patch"}:
@@ -110,6 +116,7 @@ class TurboVLAConfig:
         data = dict(payload)
         return cls(
             name=str(data.get("name", "TurboVLA")),
+            compatibility_profile=str(data.get("compatibility_profile", "libero")),
             text=TextEncoderConfig(**dict(data.get("text", {}))),
             vision=VisionEncoderConfig(**dict(data.get("vision", {}))),
             interaction=InteractionConfig(**dict(data.get("interaction", {}))),

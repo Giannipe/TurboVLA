@@ -5,6 +5,7 @@
 # Modification: [suport topdowm processing, suport param from config].
 
 from pathlib import Path
+from collections import defaultdict
 
 from starVLA.dataloader.gr00t_lerobot.datasets import LeRobotSingleDataset, LeRobotMixtureDataset
 from starVLA.dataloader.gr00t_lerobot.registry import (
@@ -16,6 +17,38 @@ from starVLA.dataloader.gr00t_lerobot.registry import (
 
 def collate_fn(batch):
     return batch
+
+
+def _task_balanced_robotwin_weights(entries, randomized_to_clean_ratio: float):
+    """Give each task equal mass, then split its Clean/Randomized mass 1:r."""
+    if randomized_to_clean_ratio <= 0:
+        raise ValueError("randomized_to_clean_ratio must be positive")
+    by_task = defaultdict(dict)
+    for dataset, source_weight, name in entries:
+        variant, separator, task = name.partition("/")
+        if not separator or variant not in {"Clean", "Randomized"}:
+            raise ValueError(f"Expected a Clean/<task> or Randomized/<task> dataset, got {name!r}")
+        if variant in by_task[task]:
+            raise ValueError(f"Duplicate {variant} dataset for task {task!r}")
+        if source_weight <= 0 or len(dataset) == 0:
+            raise ValueError(f"Dataset {name!r} must have a positive weight and non-empty data")
+        by_task[task][variant] = dataset
+
+    if len(by_task) != 50 or any(set(variants) != {"Clean", "Randomized"} for variants in by_task.values()):
+        raise ValueError("Task-balanced RoboTwin all50 requires both variants of all 50 tasks")
+
+    task_mass = 1.0 / len(by_task)
+    clean_mass = task_mass / (1.0 + randomized_to_clean_ratio)
+    randomized_mass = task_mass - clean_mass
+    print(
+        "[INFO] task-balanced RoboTwin sampling: "
+        f"tasks={len(by_task)} Clean:Randomized=1:{randomized_to_clean_ratio:g}"
+    )
+    return [
+        (by_task[task][variant], clean_mass if variant == "Clean" else randomized_mass)
+        for task in sorted(by_task)
+        for variant in ("Clean", "Randomized")
+    ]
 
 def make_LeRobotSingleDataset(
     data_root_dir: Path | str,
@@ -81,6 +114,7 @@ def get_vla_dataset(
         filtered_mixture_spec.append((d_name, d_weight, robot_type))
 
     dataset_mixture = []
+    named_datasets = []
     for d_name, d_weight, robot_type in filtered_mixture_spec:
         dataset = make_LeRobotSingleDataset(
             Path(data_root_dir),
@@ -90,6 +124,18 @@ def get_vla_dataset(
             data_cfg=data_cfg,
         )
         dataset_mixture.append((dataset, d_weight))
+        named_datasets.append((dataset, d_weight, d_name))
+
+    sampling_strategy = str(data_cfg.get("dataset_sampling_strategy", "default"))
+    if sampling_strategy == "task_uniform_variant_ratio":
+        dataset_mixture = _task_balanced_robotwin_weights(
+            named_datasets,
+            float(data_cfg.get("randomized_to_clean_ratio", 10.0)),
+        )
+        balance_dataset_weights = False
+        balance_trajectory_weights = False
+    elif sampling_strategy != "default":
+        raise ValueError(f"Unsupported dataset_sampling_strategy: {sampling_strategy}")
 
     print(
         "[INFO] LeRobotMixtureDataset "
