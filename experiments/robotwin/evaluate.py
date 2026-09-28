@@ -1,4 +1,4 @@
-"""Launch the public RoboTwin clean50 evaluation workflow."""
+"""Launch RoboTwin Clean and Randomized evaluation workflows."""
 
 from __future__ import annotations
 
@@ -10,11 +10,17 @@ import subprocess
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("checkpoint", help="Path to a released TurboVLA checkpoint")
+    parser.add_argument("checkpoint", help="Path to a TurboVLA checkpoint")
+    parser.add_argument(
+        "--mode",
+        choices=("both", "clean", "randomized"),
+        default=os.environ.get("ROBOTWIN_EVAL_MODE", "both"),
+        help="Evaluation variant (default: both Clean and Randomized)",
+    )
     parser.add_argument(
         "tasks",
         nargs="*",
-        help="Optional RoboTwin task names; omit to evaluate all clean50 tasks",
+        help="Optional RoboTwin task names; omit to evaluate all 50 tasks",
     )
     return parser
 
@@ -28,7 +34,7 @@ def main() -> None:
     if not script.is_file():
         raise FileNotFoundError(f"RoboTwin evaluation script not found: {script}")
     subprocess.run(
-        ["bash", str(script), args.checkpoint, *args.tasks],
+        ["bash", str(script), args.checkpoint, "--mode", args.mode, *args.tasks],
         cwd=repo_root,
         check=True,
     )

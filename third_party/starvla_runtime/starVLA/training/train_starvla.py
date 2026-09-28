@@ -423,7 +423,7 @@ class VLATrainer(TrainerUtils):
             self.lr_scheduler.step()
 
         return {
-            "action_dit_loss": action_loss.item(),
+            "action_loss": action_loss.item(),
         }
 
     def _finalize_training(self):
@@ -485,7 +485,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_yaml",
         type=str,
-        default="experiments/robotwin/configs/clean50.yaml",
+        default="experiments/robotwin/configs/taskbalanced_all50.yaml",
         help="Path to YAML config",
     )
     args, clipargs = parser.parse_known_args()
@@ -497,7 +497,6 @@ if __name__ == "__main__":
 
     # Normalise legacy YAML keys into the current `version_id == "0.21"` schema.
     # This is idempotent and does not modify framework class signatures.
-    # See bar/config_收紧.md for the rationale.
     cfg = apply_config_compat(cfg)
 
     # Store source config path for later copying to output dir

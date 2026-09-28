@@ -27,6 +27,7 @@ This repository contains the official implementation of **TurboVLA** for the pap
 
 ## 📣 News
 
+- `2026.09.27`:🚀TurboVLA achieves an **88.06%** average success rate on **RoboTwin 2.0**. The paper, code, and checkpoints have been updated.
 - `2026.07.31`: Released the TurboVLA model checkpoints on [Hugging Face](https://huggingface.co/H-EmbodVis/TurboVLA).
 - `2026.07.30`: Released the paper, training and evaluation code.
 
@@ -36,9 +37,9 @@ This repository contains the official implementation of **TurboVLA** for the pap
 
 ## 📄 Abstract
 
-Vision-language-action (VLA) models commonly adopt an LLM-centric V &rarr; L &rarr; A pathway, where visual observations are projected into the representation space of a large language model before being decoded into robot actions. Although effective, this design incurs substantial computation and memory overhead at every policy invocation.
+Vision-language-action (VLA) models commonly adopt an LLM-centric $V\rightarrow \boldsymbol{L}\rightarrow A$ pathway, processing visual observations and language instructions through a large language model before predicting robot actions. Although effective, this design incurs substantial computation and memory overhead.
 
-In this work, we introduce **TurboVLA**, a new VLA paradigm that reformulates the conventional V &rarr; L &rarr; A pathway as a direct V + L &rarr; A mapping. Instead of using a large language model as the central interface between perception and action, TurboVLA independently encodes visual observations and language instructions, directly exchanges information between them through lightweight bidirectional vision-language interaction, and predicts continuous action chunks with a compact decoder. This simple design constructs task-conditioned representations directly from visual and linguistic features, significantly reducing the computational and memory costs of VLA inference. On LIBERO, TurboVLA achieves 97.7% average success with only 0.2B parameters, 31.2 ms inference latency, and 0.9 GB inference VRAM on a consumer-grade RTX 4090, matching or outperforming substantially larger VLA policies. These results establish TurboVLA as a simple and effective alternative to the prevailing LLM-centric VLA paradigm, offering a new perspective on how vision, language, and action can be connected for efficient robotic manipulation.
+In this work, we introduce **TurboVLA**, a compact VLA architecture built on a direct $\boldsymbol{V}+\boldsymbol{L}\rightarrow A$mapping. Instead of using a large language model as the central interface between perception and action, TurboVLA independently encodes visual observations and language instructions, directly exchanges information between them through lightweight bidirectional vision-language interaction, and predicts continuous action chunks with a compact decoder. This simple design directly constructs task-conditioned representations while avoiding the overhead of an LLM-centric execution pathway. On LIBERO, TurboVLA achieves **97.6\%** average success with only 0.2B parameters, 31.2ms inference latency, and 0.9GiB inference VRAM on a consumer-grade RTX 4090. Notably, a 0.4B TurboVLA achieves **88.06\%** success on RoboTwin 2.0, even matching or outperforming substantially larger VLA policies. These results demonstrate that the simple $\boldsymbol{V}+\boldsymbol{L}\rightarrow A$ design of TurboVLA can achieve high performance without requiring an LLM-centric execution pathway, offering a new perspective on how vision, language, and action can be connected for efficient robotic manipulation.
 
 <div align="center">
   <a href="assets/figures/paradigm-and-performance.png">
@@ -154,14 +155,18 @@ Released normalization statistics are stored in `experiments/libero/configs/libe
 
 ### RoboTwin Data
 
-Download the clean LeRobot dataset and create the expected local link:
+Download both converted LeRobot variants into one root. The script downloads
+`StarVLA/RoboTwin-Clean` and the `Randomized/` tree from
+`StarVLA/RoboTwin-Randomized`, then checks all 50 task pairs:
 
 ```bash
-bash scripts/robotwin/prepare_data.sh /path/to/storage
-export ROBOTWIN_DATA_ROOT="$PWD/playground/Datasets/RoboTwin"
+bash scripts/robotwin/prepare_data.sh /path/to/converted/RoboTwin
+export ROBOTWIN_DATA_ROOT=/path/to/converted/RoboTwin
 ```
 
-The default downloader uses [StarVLA/RoboTwin-Clean](https://huggingface.co/datasets/StarVLA/RoboTwin-Clean). The training registry expects all 50 datasets under `Clean/<task_name>`.
+Install the Hugging Face `hf` CLI first. The resulting layout is
+`Clean/<task_name>` and `Randomized/<task_name>`. See
+[experiments/robotwin/README.md](experiments/robotwin/README.md) for details.
 
 ---
 
@@ -169,7 +174,7 @@ The default downloader uses [StarVLA/RoboTwin-Clean](https://huggingface.co/data
 
 ### LIBERO Training
 
-The paper recipe uses DINOv3 ViT-B, two camera views, 7-D actions, a 12-step action chunk, 80k optimizer steps, 10k warmup steps, and global batch size 128 on four GPUs (per-device batch size 8 with 4 gradient-accumulation steps).
+The paper recipe uses DINOv3 ViT-B, two camera views, 7-D actions, a 12-step action chunk, 40k optimizer steps, 10k warmup steps, and global batch size 128 on four GPUs (per-device batch size 8 with 4 gradient-accumulation steps).
 
 ```bash
 torchrun --nproc_per_node=4 experiments/libero/train.py \
@@ -209,17 +214,20 @@ Valid suite names are `libero_spatial`, `libero_object`, `libero_goal`, and `lib
 
 ### RoboTwin Training
 
-The paper recipe uses DINOv3 ViT-L, three camera views, 14-D absolute joint-position actions, a 50-step ACT head, global batch size 192, and 55k optimizer steps on four GPUs.
+The RoboTwin recipe reported in the paper uses DINOv3 ViT-L, three camera views at 224×224,
+frozen BERT, 14-D absolute joint-position actions, and a 50-step ACT head.
+Tasks are sampled uniformly with Clean:Randomized at 1:10. Training uses eight
+GPUs × 64 samples (global batch 512), 150k optimizer steps, and a `5e-5`
+learning rate.
 
 ```bash
-export ROBOTWIN_DATA_ROOT="$PWD/playground/Datasets/RoboTwin"
+export ROBOTWIN_DATA_ROOT=/path/to/converted/RoboTwin
 export BERT_MODEL_PATH=/path/to/bert-base-uncased
 export TURBOVLA_INIT_CKPT=/path/to/groundingdino_swint_ogc.pth
 export DINOV3_MODEL_PATH=/path/to/dinov3-vitl
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
-MAX_TRAIN_STEPS=55000 \
-RUN_ID=turbovla_robotwin_clean50_55k \
+RUN_ID=turbovla_robotwin_all50_taskbalanced_150k \
 bash scripts/robotwin/train.sh
 ```
 
@@ -231,14 +239,17 @@ The policy server and RoboTwin simulator can run in separate Python environments
 export ROBOTWIN_PATH=/path/to/RoboTwin
 export STARVLA_PYTHON=/path/to/policy-env/bin/python
 export ROBOTWIN_PYTHON=/path/to/robotwin-env/bin/python
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
-ROBOTWIN_TEST_NUM=100 \
 bash scripts/robotwin/evaluate.sh \
-  pretrained/TurboVLA/checkpoints/robotwin/steps_55000_ema_model.safetensors
+  /path/to/steps_150000_ema_pytorch_model.pt
 ```
 
-Append task names to the evaluation command to run a subset. Omitting them evaluates all 50 clean tasks.
+By default, the command evaluates all 50 tasks in both Clean and Randomized.
+Use `--mode clean` or `--mode randomized` for one variant, and append task
+names for a subset. Check out [RoboTwin 2.0 commit `bf44be5`](https://github.com/RoboTwin-Platform/RoboTwin/commit/bf44be5)
+for this evaluation adapter. That simulator version evaluates 100 episodes per
+task; its `eval_policy.py` does not read `ROBOTWIN_TEST_NUM`.
 
 ---
 

@@ -329,6 +329,7 @@ def _make_model_args(
     allow_hf_download: bool,
 ) -> SimpleNamespace:
     return SimpleNamespace(
+        compatibility_profile="libero",
         dinov3_path=dinov3_path,
         bert_path=bert_path,
         hidden_dim=hidden_dim,
@@ -430,6 +431,7 @@ class TurboVLAPolicy:
             from ..models.configuration import TurboVLAConfig
 
             config = TurboVLAConfig.from_mapping(model_config)
+            config.compatibility_profile = "libero"
             config.text.model_name_or_path = self.bert_path
             config.text.local_files_only = not allow_hf_download
             config.vision.model_name_or_path = self.dinov3_path

@@ -64,6 +64,12 @@ def build_framework(cfg): # The single entry point for building different model 
     _auto_import_framework_modules()
 
     framework_id = cfg.framework.name
+    if framework_id not in FRAMEWORK_REGISTRY._registry and all(
+        hasattr(cfg.framework, key) for key in ("dinov3", "fusion", "action_model")
+    ):
+        # Route historical RoboTwin all50 checkpoints through the TurboVLA adapter.
+        framework_id = "TurboVLA"
+        cfg.framework.name = framework_id
     if framework_id not in FRAMEWORK_REGISTRY._registry:
         available = sorted(FRAMEWORK_REGISTRY._registry.keys())
         raise NotImplementedError(
