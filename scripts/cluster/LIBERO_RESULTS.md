@@ -1,4 +1,4 @@
-# Confronto evaluation LIBERO — 10 settembre 2026
+# Confronto evaluation LIBERO — aggiornato al 28 settembre 2026
 
 Tutte le quattro evaluation attuali sono complete: **16 suite, 8.000 episodi**.
 Ogni suite contiene 10 task × 50 prove = 500 episodi. Le celle riportano
@@ -7,22 +7,23 @@ fra tutti i successi e i suoi 2.000 episodi.
 
 ## Risultati
 
-| Checkpoint valutato | Spatial | Object | Goal | Long (`libero_10`) | Media | Successi totali | Δ vs paper¹ |
+| Checkpoint valutato | Spatial | Object | Goal | Long (`libero_10`) | Media | Successi totali | Δ vs paper |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Paper, tabella 1 | 99,2% | 99,8% | 97,4% | 94,2% | 97,7%¹ | non forniti come log | — |
-| Autori unified, EMA dichiarata a 34k | 97,8% (489) | 99,2% (496) | 98,0% (490) | 94,2% (471) | **97,30%** | **1946/2000** | −0,35 pp |
-| Autori non-unified, quattro export storici | 97,6% (488) | 99,2% (496) | 95,4% (477) | 92,4% (462) | **96,15%** | **1923/2000** | −1,50 pp |
-| Nostro `libero-baseline`, EMA 34k | 97,8% (489) | 98,8% (494) | 96,2% (481) | 91,2% (456) | **96,00%** | **1920/2000** | −1,65 pp |
-| Nostro `libero-baseline`, EMA 80k | 98,4% (492) | 98,8% (494) | 95,0% (475) | 91,8% (459) | **96,00%** | **1920/2000** | −1,65 pp |
+| Paper, tabella 1 aggiornata | 97,0% | 100,0% | 98,2% | 95,2% | **97,60%** | non forniti come log | — |
+| Autori unified, EMA dichiarata a 34k | 97,8% (489) | 99,2% (496) | 98,0% (490) | 94,2% (471) | **97,30%** | **1946/2000** | −0,30 pp |
+| Autori non-unified, quattro export storici | 97,6% (488) | 99,2% (496) | 95,4% (477) | 92,4% (462) | **96,15%** | **1923/2000** | −1,45 pp |
+| Nostro `libero-baseline`, EMA 34k | 97,8% (489) | 98,8% (494) | 96,2% (481) | 91,2% (456) | **96,00%** | **1920/2000** | −1,60 pp |
+| Nostro `libero-baseline`, EMA 80k | 98,4% (492) | 98,8% (494) | 95,0% (475) | 91,8% (459) | **96,00%** | **1920/2000** | −1,60 pp |
 
-¹ Il paper stampa 97,7%; la media aritmetica dei suoi quattro valori di suite
-è **97,65%**. La colonna Δ usa 97,65%, per evitare un errore di arrotondamento.
-Il riferimento è la [tabella 1 del paper v2](https://arxiv.org/html/2607.27205v2#S5.T1).
+I valori paper sono quelli pubblicati nel repository ufficiale con il
+[commit `6727c87`](https://github.com/H-EmbodVis/TurboVLA/commit/6727c875666f8d5dda8d8cca0043da200738fe73).
+La media aritmetica delle quattro suite è esattamente **97,60%** e costituisce
+il riferimento della colonna Δ. La precedente tabella arXiv v2 riportava 97,7%.
 `pp` significa punti percentuali, non variazione percentuale relativa.
 
-Il checkpoint unified è il migliore di questi quattro run: Long coincide
-con il paper, Goal è superiore di 0,6 pp, Spatial inferiore di 1,4 pp e
-Object inferiore di 0,6 pp. Non abbiamo riprodotto esattamente tutte le suite.
+Il checkpoint unified è superiore al valore aggiornato del paper di 0,8 pp su
+Spatial, ma è inferiore di 0,8 pp su Object, 0,2 pp su Goal e 1,0 pp su Long.
+Non abbiamo riprodotto esattamente tutte le suite.
 
 Fra i nostri 34k e 80k, Spatial guadagna 3 successi e Long 3, Goal ne perde 6,
 Object è invariata: **nessun miglioramento medio a 80k**. Entrambi sono
@@ -120,5 +121,6 @@ Revisioni Hugging Face fissate di `H-EmbodVis/TurboVLA`: unified
 Gli hash dei checkpoint baseline nella tabella sono quelli registrati nelle
 evaluation; gli hash dei pesi ufficiali sono stati anche ricalcolati nell'audit odierno.
 
-Le evaluation storiche eliminate su richiesta non sono mescolate con questi run;
-i loro vecchi resoconti restano nell'[archivio](archive/2026-09-06).
+Le evaluation storiche eliminate su richiesta non sono mescolate con questi run.
+La vecchia directory documentale `scripts/cluster/archive` è stata rimossa perché
+non faceva più parte del workflow operativo.

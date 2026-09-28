@@ -212,6 +212,43 @@ lunghezza testo. È un nostro metadato di riproducibilità, non un output upstre
 `results.json` contiene gli esiti prodotti dall'evaluator; stdout/stderr rimangono
 nei soli log Slurm. Non viene prodotta automaticamente una tabella per categoria.
 
+### Aggregazione
+
+L'aggregazione seguente usa `task_classification.json` ufficiale e associa ogni
+`task_id` dei risultati (0-based) all'elemento con `id=task_id+1` (1-based).
+Sono incluse tutte e quattro le suite, per un totale di 10.030 episodi.
+
+#### Success rate per suite e perturbazione
+
+| Suite | Camera | Robot | Language | Light | Background | Noise | Layout | Total |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Spatial | 36,44% | 51,43% | 92,05% | 97,26% | 76,36% | 43,02% | 74,81% | **66,44%** |
+| Object | 41,67% | 56,28% | 99,15% | 91,58% | 87,10% | 38,63% | 69,73% | **66,40%** |
+| Goal | 16,91% | 17,60% | 38,54% | 48,39% | 43,06% | 19,53% | 39,76% | **30,80%** |
+| Long | 30,07% | 62,09% | 83,81% | 60,22% | 50,17% | 36,75% | 75,96% | **55,70%** |
+| **Tutte le suite** | **31,08%** | **46,45%** | **77,36%** | **74,96%** | **63,10%** | **34,54%** | **63,93%** | **54,53%** |
+
+| Categoria | Successi / episodi | Success rate |
+|---|---:|---:|
+| Camera | 497 / 1.599 | 31,08% |
+| Robot | 720 / 1.550 | 46,45% |
+| Language | 1.189 / 1.537 | 77,36% |
+| Light | 856 / 1.142 | 74,96% |
+| Background | 679 / 1.076 | 63,10% |
+| Noise | 553 / 1.601 | 34,54% |
+| Layout | 975 / 1.525 | 63,93% |
+| **Totale** | **5.469 / 10.030** | **54,53%** |
+
+Il totale è calcolato come successi/episodi pesati, non come media semplice
+delle sette percentuali. Per rigenerare la tabella:
+
+```bash
+python scripts/cluster/aggregate_liberoplus.py \
+  --root "$SCRATCH_FLASH/TurboVLA" \
+  --run liberoplus-author-ckpt-unified \
+  --run liberoplus-author-ckpt-unified-goal-long
+```
+
 ## Punti da non nascondere nel confronto
 
 1. **Lunghezza testo TurboVLA:** l'unified contiene una `model_config` che il
@@ -278,29 +315,24 @@ L'ambiente è in `/home/gpepe/miniconda3/envs/turbovla-liberoplus`, come gli alt
 
 ## Stato
 
-- **Aggiornamento 15 settembre 2026:** primo run GPU **1930382**,
-  `liberoplus-author-ckpt-unified`, terminato per time limit l'11 settembre alle
-  21:37:15 UTC. Spatial e Object sono complete e i conteggi dei JSON sono coerenti;
-  Goal aveva completato 263 episodi nei log ma non ha un `results.json` finale.
-  Long non era iniziata. Non si includono i tentativi parziali nel punteggio.
+- **Aggiornamento 19 settembre 2026:** sono disponibili i `results.json` completi
+  per tutte e quattro le suite: 10.030 episodi, 5.469 successi e success rate
+  complessivo pesato **54,53%**. L'aggregazione per categoria è riportata sopra;
+  nessun tentativo parziale è incluso nei conteggi.
 
   | Suite | Successi / episodi | Success rate | Directory risultati |
   |---|---:|---:|---|
   | Spatial | 1.596 / 2.402 | 66,44% | `results/liberoplus/liberoplus-author-ckpt-unified/libero_spatial/` |
   | Object | 1.672 / 2.518 | 66,40% | `results/liberoplus/liberoplus-author-ckpt-unified/libero_object/` |
-  | Goal | in attesa del nuovo run | — | `results/liberoplus/liberoplus-author-ckpt-unified-goal-long/libero_goal/` |
-  | Long | in attesa del nuovo run | — | `results/liberoplus/liberoplus-author-ckpt-unified-goal-long/libero_10/` |
+  | Goal | 798 / 2.591 | 30,80% | `results/liberoplus/liberoplus-author-ckpt-unified-goal-long/libero_goal/` |
+  | Long | 1.403 / 2.519 | 55,70% | `results/liberoplus/liberoplus-author-ckpt-unified-goal-long/libero_10/` |
+  | **Totale pesato** | **5.469 / 10.030** | **54,53%** | — |
 
-  Il job **1938718**, `liberoplus-author-ckpt-unified-goal-long`, è stato
-  sottomesso per Goal dall'inizio, poi Long: una GPU A40, 8 CPU, 64 GiB, limite
-  24 ore (massimo della partizione). Usa `sbatch --wrap` con due invocazioni
-  sequenziali di `scripts/cluster/evaluate.sh --benchmark liberoplus --trials 1`,
-  rispettivamente `--suite libero_goal` e `--suite libero_10`, interrotte se la
-  prima fallisce. Nessun nuovo script operativo e nessuna ripresa dal task 263.
-  Checkpoint unified, config della policy e codice Python di policy/evaluator
-  identici al primo run; la durata resta da verificare per le due suite residue.
-  Output derivato dal nome job, log in `logs/turbovla/evaluation/` con quel nome.
-  Vecchi risultati, sorgenti parziali Goal e log del timeout conservati intatti.
+  Il job **1938718** ha completato Goal ed è scaduto durante Long dopo 1.833
+  episodi. Il job finale **1945668** ha quindi rieseguito Long dall'inizio con
+  gli stessi checkpoint, configurazione e protocollo (`--trials 1`), completando
+  2.519/2.519 episodi il 19 settembre alle 06:58:49 UTC. I tentativi incompleti
+  non sono stati sommati ai risultati finali.
 - **57 test locali passati** (38 precedenti + 19 LIBERO+). Questi non sono rollout.
 - Revisione locale conclusiva: controlli CPU ripetuti senza il checkout LIBERO+
   nel `PYTHONPATH`, manifest reale e 10.030 task ricontrollati, hash delle config
@@ -358,7 +390,7 @@ L'ambiente è in `/home/gpepe/miniconda3/envs/turbovla-liberoplus`, come gli alt
   la riparazione del clone (SHA256
   `dd46c4e656a2d08153b37021fc56827f70db0be9adade27e09bc5cf6e369586b`).
 - Nessun training LIBERO+ avviato; evaluation completa sulle quattro suite
-  ancora da terminare. L'integrazione viene pubblicata sul branch
+  terminata. L'integrazione viene pubblicata sul branch
   `setup/cluster-reproduction` con messaggio di commit `LiberoPlus`.
 
 ### Secondo tentativo e diagnosi BeeGFS

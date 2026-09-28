@@ -13,9 +13,9 @@ RoboTwin, non include LIBERO+. In evaluation usare un benchmark esplicito e
 `--suite all` per le quattro suite LIBERO/LIBERO+.
 Stato LIBERO+: asset scaricati, estratti e verificati; ambiente isolato installato
 e controlli CPU passati (job 1930349, exit 0), 57 test locali passati.
-GPU/rendering e rollout verificati su Spatial e Object, completate l'11 settembre;
-Goal e Long rilanciate il 15 settembre nel job 1938718, dopo il timeout del primo
-run. Risultati parziali e limite noto grayscale sono nella guida.
+Evaluation GPU completata sulle quattro suite: **5.469/10.030 successi (54,53%)**.
+Risultati per suite, tentativi parziali esclusi e limite noto grayscale sono nella
+guida.
 
 | File | Funzione |
 |---|---|
@@ -53,9 +53,9 @@ In anteprima senza Slurm il fallback è `turbovla-train-libero` o
 `turbovla-evaluate-libero`; per simulare il nome usare
 `SLURM_JOB_NAME=libero-baseline bash scripts/cluster/train.sh --benchmark libero --dry-run`.
 
-I vecchi file sono conservati in [archive/2026-09-06](archive/2026-09-06),
-**non sono alternative operative**. Il codice attivo non usa l'archivio.
-Le pulizie sono documentate nelle sezioni 6, 8 e 9. Dataset e pesi ufficiali
+La vecchia directory `archive` è stata rimossa: non conteneva componenti usati
+dal workflow operativo. Le pulizie sono documentate nelle sezioni 6, 8 e 9.
+Dataset e pesi ufficiali
 sono conservati; alcuni risultati e run storici sono stati eliminati su richiesta.
 Le quattro evaluation attuali sono complete e confrontate in
 [LIBERO_RESULTS.md](LIBERO_RESULTS.md). I test locali sono spiegati in
@@ -63,12 +63,12 @@ Le quattro evaluation attuali sono complete e confrontate in
 
 ## 1. Quale ricetta stiamo seguendo
 
-Riferimento verificato: upstream `b29ab1420baa5c663ec935df513f2012430beb67`.
+Riferimento verificato: upstream `6727c875666f8d5dda8d8cca0043da200738fe73`.
 
-- [README principale](https://github.com/H-EmbodVis/TurboVLA/blob/b29ab1420baa5c663ec935df513f2012430beb67/README.md)
-  e [guida LIBERO](https://github.com/H-EmbodVis/TurboVLA/blob/b29ab1420baa5c663ec935df513f2012430beb67/experiments/libero/README.md).
-- [Guida RoboTwin](https://github.com/H-EmbodVis/TurboVLA/blob/b29ab1420baa5c663ec935df513f2012430beb67/experiments/robotwin/README.md)
-  e [config clean50](https://github.com/H-EmbodVis/TurboVLA/blob/b29ab1420baa5c663ec935df513f2012430beb67/experiments/robotwin/configs/clean50.yaml).
+- [README principale](https://github.com/H-EmbodVis/TurboVLA/blob/6727c875666f8d5dda8d8cca0043da200738fe73/README.md)
+  e [guida LIBERO](https://github.com/H-EmbodVis/TurboVLA/blob/6727c875666f8d5dda8d8cca0043da200738fe73/experiments/libero/README.md).
+- [Guida RoboTwin](https://github.com/H-EmbodVis/TurboVLA/blob/6727c875666f8d5dda8d8cca0043da200738fe73/experiments/robotwin/README.md)
+  e [config task-balanced](https://github.com/H-EmbodVis/TurboVLA/blob/6727c875666f8d5dda8d8cca0043da200738fe73/experiments/robotwin/configs/taskbalanced_all50.yaml).
 - [Paper v2, §5](https://arxiv.org/html/2607.27205v2#S5) e chiarimenti degli autori:
   [#11](https://github.com/H-EmbodVis/TurboVLA/issues/11#issuecomment-5504905902),
   [#12](https://github.com/H-EmbodVis/TurboVLA/issues/12#issuecomment-5504917736),
@@ -79,7 +79,7 @@ Le discrepanze non vengono nascoste:
 | Punto | Default scelto | Motivazione |
 |---|---|---|
 | Batch LIBERO | **128 = 4 GPU × 8 × 4 accumuli** | README aggiornato e risposta degli autori; il paper v2 scrive 256 |
-| Training LIBERO | 80k step, warmup 10k | Ricetta rilasciata; il checkpoint pubblico nuovo è dichiarato EMA a **34k** |
+| Training LIBERO | **40k** optimizer step, warmup 10k | Documentazione ufficiale aggiornata in `6727c87`; il parser conserva ancora il default storico 80k e il checkpoint pubblico è dichiarato EMA a **34k** |
 | Training RoboTwin | **55k** step, warmup 1k | Paper e comando del README principale; script/YAML generici hanno 100k |
 | Evaluation RoboTwin | **100** prove/task | Risultato clean50 pubblicato; il wrapper upstream da solo imposta 20 |
 | Transformers LIBERO | **4.56.0** | Gli autori segnalano differenze nelle feature DINO con versioni successive |
@@ -683,9 +683,9 @@ Pulizia esplicitamente richiesta, completata senza job attivi: eliminate
 senza backup le directory scratch `results/libero_official_eval`,
 `results/libero_official_eval_isolated`, `results/libero_unified_eval` e
 `results/libero/turbovla_libero-20260907T021005.521770Z` (circa 1,3 MiB).
-I resoconti documentali nell'archivio Git restano storici e possono riferirsi
-a quei file ormai eliminati. **Preservati** i risultati 34k/80k, tutti i
-checkpoint, i dataset e gli ambienti. I vecchi log Slurm delle release
+La directory documentale `scripts/cluster/archive` è stata rimossa perché non
+più necessaria. **Preservati** i risultati 34k/80k, tutti i checkpoint, i
+dataset e gli ambienti. I vecchi log Slurm delle release
 ufficiali erano già assenti dalla directory log attiva.
 
 Riferimenti: [guida evaluation](https://github.com/H-EmbodVis/TurboVLA/blob/main/experiments/libero/README.md#evaluation),
