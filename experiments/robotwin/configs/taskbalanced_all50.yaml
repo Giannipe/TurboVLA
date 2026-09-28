@@ -1,10 +1,10 @@
-run_id: turbovla_robotwin_clean50
+run_id: turbovla_robotwin_all50
 run_root_dir: results/Checkpoints
 seed: 42
 wandb_entity: your_wandb_entity
-wandb_project: turbovla_robotwin
+wandb_project: TurboVLA_Robotwin
 is_debug: false
-version_id: "0.1"
+version_id: "0.21"
 
 framework:
   name: TurboVLA
@@ -49,10 +49,10 @@ framework:
     state_dim: 14
     horizon: 50
     num_layers: 3
-    dropout: 0.1
     num_state_tokens: 2
     state_hidden_dim: 256
     mlp_hidden_dim: 512
+    dropout: 0.1
     loss_type: l1
 
 datasets:
@@ -60,24 +60,26 @@ datasets:
     dataset_py: lerobot_datasets
     include_state: true
     data_root_dir: ${oc.env:ROBOTWIN_DATA_ROOT}
-    data_mix: robotwin_clean_50
+    data_mix: robotwin_all_50
     action_type: abs_qpos
     action_mode: abs
     sequential_step_sampling: false
-    per_device_batch_size: 48
+    dataset_sampling_strategy: task_uniform_variant_ratio
+    randomized_to_clean_ratio: 10.0
+    per_device_batch_size: 64
     load_all_data_for_training: true
     obs_image_size: [224, 224]
     video_backend: pyav
-    num_workers: 8
-    prefetch_factor: 4
+    num_workers: 4
+    prefetch_factor: 2
     persistent_workers: true
     pin_memory: true
 
 trainer:
   use_deepspeed: true
-  max_train_steps: 100000
+  max_train_steps: 150000
   num_warmup_steps: 1000
-  save_interval: 5000
+  save_interval: 10000
   eval_interval: 1000
   learning_rate:
     base: 5.0e-05
@@ -93,12 +95,13 @@ trainer:
   max_grad_norm: 1.0
   gradient_clipping: 1.0
   gradient_accumulation_steps: 1
+  ema_decay: 0.999
+  ema_device: cuda
   optimizer:
     name: AdamW
     betas: [0.9, 0.95]
     eps: 1.0e-08
     weight_decay: 1.0e-10
   save_format: pt
-  ema_decay: 0.999
-  ema_device: cuda
   logging_frequency: 50
+  is_resume: false

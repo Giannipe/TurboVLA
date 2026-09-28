@@ -1,1 +1,1 @@
-"""RoboTwin 2.0 clean50 training and evaluation entry points."""
+"""RoboTwin 2.0 all50 training and evaluation entry points."""

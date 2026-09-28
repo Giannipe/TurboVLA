@@ -1,4 +1,4 @@
-"""RoboTwin clean50 data configuration and dataset mixture."""
+"""RoboTwin all50 Clean/Randomized data configuration and mixtures."""
 
 from starVLA.dataloader.gr00t_lerobot.datasets import ModalityConfig
 from starVLA.dataloader.gr00t_lerobot.transform.base import ComposedModalityTransform
@@ -8,7 +8,7 @@ from starVLA.dataloader.gr00t_lerobot.transform.state_action import (
 )
 
 
-class RoboTwinClean50DataConfig:
+class RoboTwinDataConfig:
     """Three-camera, bimanual RoboTwin data with a 50-step action horizon."""
 
     video_keys = ["video.cam_high", "video.cam_left_wrist", "video.cam_right_wrist"]
@@ -79,10 +79,10 @@ class RoboTwinClean50DataConfig:
         )
 
 
-ROBOT_TYPE_CONFIG_MAP = {"robotwin50": RoboTwinClean50DataConfig()}
+ROBOT_TYPE_CONFIG_MAP = {"robotwin50": RoboTwinDataConfig()}
 ROBOT_TYPE_TO_EMBODIMENT_TAG = {}
 
-_CLEAN50_TASKS = (
+_ROBOTWIN_TASKS = (
     "adjust_bottle",
     "beat_block_hammer",
     "blocks_ranking_rgb",
@@ -136,8 +136,9 @@ _CLEAN50_TASKS = (
 )
 
 DATASET_NAMED_MIXTURES = {
-    "robotwin_clean_50": [
-        (f"Clean/{task_name}", 1.0, "robotwin50")
-        for task_name in _CLEAN50_TASKS
-    ]
+    "robotwin_all_50": [
+        (f"{variant}/{task_name}", 1.0, "robotwin50")
+        for task_name in _ROBOTWIN_TASKS
+        for variant in ("Clean", "Randomized")
+    ],
 }
