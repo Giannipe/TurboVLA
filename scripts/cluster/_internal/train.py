@@ -110,7 +110,9 @@ def robotwin_config(args):
         cfg[f"trainer.learning_rate.{group}"] = args.lr
     # Use the upstream YAML schema, without importing the GPU runtime.
     import yaml
-    base = yaml.safe_load((assets.ROOT / "experiments/robotwin/configs/clean50.yaml").read_text())
+    base = yaml.safe_load(
+        (assets.ROOT / "experiments/robotwin/configs/taskbalanced_all50.yaml").read_text()
+    )
     for value in args.set:
         key, sep, raw = value.partition("=")
         assets.require(sep, "--set requires KEY=VALUE")
@@ -127,8 +129,8 @@ def robotwin_config(args):
 def robotwin_command(args, cfg, source):
     command = [sys.executable, "-m", "accelerate.commands.launch", "--config_file",
                str(source / "experiments/robotwin/configs/deepspeed_zero2.yaml"), "--num_processes", str(args.gpus),
-               "--main_process_port", "29630", str(source / "third_party/starvla_runtime/starVLA/training/train_robotwin_clean_act_pi05_recipe.py"),
-               "--config_yaml", str(source / "experiments/robotwin/configs/clean50.yaml"),
+               "--main_process_port", "29630", str(source / "third_party/starvla_runtime/starVLA/training/train_turbovla.py"),
+               "--config_yaml", str(source / "experiments/robotwin/configs/taskbalanced_all50.yaml"),
                "--run_root_dir", str(args.output.parent), "--run_id", args.output.name]
     for key, value in cfg.items():
         command += ["--" + key, json.dumps(value) if not isinstance(value, str) else value]

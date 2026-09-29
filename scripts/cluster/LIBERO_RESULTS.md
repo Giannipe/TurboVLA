@@ -48,7 +48,7 @@ e non dimostra equivalenza statistica con il paper.
   Per i quattro export storici carichiamo i pesi pubblicati, senza convertirli
   e **senza dedurre che siano EMA** dal solo nome o dai metadati.
 
-La [guida upstream](https://github.com/H-EmbodVis/TurboVLA/blob/b29ab1420baa5c663ec935df513f2012430beb67/experiments/libero/README.md#evaluation)
+La [guida upstream](https://github.com/H-EmbodVis/TurboVLA/blob/6727c875666f8d5dda8d8cca0043da200738fe73/experiments/libero/README.md#evaluation)
 usa una suite per invocazione; lo scheduling sequenziale è il nostro adattamento
 al cluster. Gli autori raccomandano l'unified su tutte le suite e spiegano che
 gli export precedenti derivavano dal training misto, non da quattro training
